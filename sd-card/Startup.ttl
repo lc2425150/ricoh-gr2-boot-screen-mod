@@ -1,0 +1,118 @@
+/* ============================================================================
+ *  GR II 自定义开机画面 —— SD 卡 Startup.ttl（路径 B）
+ *  ============================================================================
+ *
+ *  【原理：已由固件静态分析确证】
+ *
+ *    1. 相机开机时，作业调度表 job0（"refresh"，handler @0xA00E879A）检查
+ *         boot.isLoaded[CORE] && boot.isLoaded[BE0] && boot.isLoaded[BE]
+ *       三个条件全部非零后，执行：
+ *             sprintf("script %s", "W*:/Startup.ttl")
+ *
+ *    2. "*:" 是通配符，匹配所有已挂载盘符。
+ *       GR II 盘符表 = I A B C D E H，其中 H: = SD 卡
+ *       （证据：H:/DCIM/%03dRICOH/R001%04d.JPG、%c:/MISC/NOCHANGE.SD）
+ *
+ *    3. 因此 SD 卡根目录下的 Startup.ttl 会被自动执行。
+ *
+ *  【风险评估】
+ *
+ *    最坏情况仅是开机画面异常，相机其他功能不受影响。
+ *    拔掉 SD 卡即恢复原状 —— 不存在变砖风险。
+ *
+ *  【TTL 语法要点】（从机内 A:/update.ttl 实测语法归纳）
+ *
+ *    注释           ;  分号到行尾
+ *    标签定义       :Main            冒号开头
+ *    调用子程序     call updateCom
+ *    送入缓冲区     sendln inputstr
+ *    条件           if <expr> then ... endif
+ *                    elseif ... else ... endif
+ *    循环           for / next、while / endwhile、do / until
+ *    变量赋值       result = 0
+ *    十六进制       $00000115
+ *    格式化         %d 十进制、%x 十六进制、%s 字符串
+ *    文件命令       filecopy / fileopen / filecreate / filewrite /
+ *                   fileread / filestat / filedelete / fileclose ...
+ *    字符串命令     sprintf / sprintf2 / strconcat / strcompare / strlen ...
+ *    目录命令       getdir / findfirst / findnext / foldercreate ...
+ *    流程           exit / return / goto / setexitcode
+ *
+ *    语法范本参照机内 A:/update.ttl（理光原厂脚本，2011-2015）
+ *
+ *  ============================================================================ */
+
+
+/* ===========================================================================
+ *  【第一步 · 最小验证】先只启用这一段
+ *
+ *  目的：确认 Startup.ttl 确实被执行。这是后续所有操作的前提。
+ *  预期：开机后屏幕上出现 STARTUP_TTL_RUNNING
+ *        若无反应，说明卡未挂载 / 门控未过 / 语法有误 —— 请先排查，不要继续
+ * =========================================================================== */
+
+sprintf "dispstr STARTUP_TTL_RUNNING"
+sendln inputstr
+end
+
+
+/* ===========================================================================
+ *  【第二步 · 换图】确认第一步成功后，把上面的段落注释掉，启用下面这段
+ *
+ *  前置条件：
+ *    · SD 卡根目录已有 dvf_TDSt.brp（用 gr2boot.py 生成）
+ *    · 已确认第一步的验证文字能显示
+ * =========================================================================== */
+
+/*
+:Main
+    sprintf "dispstr PATCHING BOOT IMAGE"
+    sendln inputstr
+
+    ; 把 SD 卡上的新画面复制到机内 A:/img/ 覆盖原文件
+    ; filecopy 的参数形式为 <目标> <源>，与 Tera Term 宏一致
+    sprintf "filecopy A:/img/dvf_TDSt.brp H:/dvf_TDSt.brp"
+    sendln inputstr
+
+    sprintf "dispstr DONE"
+    sendln inputstr
+    end
+*/
+
+
+/* ===========================================================================
+ *  【备用方案 · 若 filecopy 报错】
+ *
+ *  固件会输出 "script %s error: %s"。可改用逐步方式定位：
+ *
+ *    ; 1) 先确认源文件可见
+ *    sprintf "filestat H:/dvf_TDSt.brp"
+ *    sendln inputstr
+ *
+ *    ; 2) 确认目标目录存在
+ *    sprintf "getdir A:/img"
+ *    sendln inputstr
+ *
+ *    ; 3) 试试 fileopen 写法
+ *    sprintf "fileopen 1 A:/img/dvf_TDSt.brp"
+ *    sendln inputstr
+ *    sprintf "fileclose 1"
+ *    sendln inputstr
+ *
+ *  另：若提示只读/权限错误，说明 job0 的 W 前缀代表可写态但内部 A: 盘受保护，
+ *      此时改走 A:/update.ttl 路径 —— 它在 fsys stop 之前的可写状态执行。
+ * =========================================================================== */
+
+
+/* ===========================================================================
+ *  【回滚】
+ *
+ *  方式一（最简单）：直接拔掉 SD 卡，相机使用机内原始资源。
+ *  方式二：把原始 dvf_TDSt.brp 放回 SD 卡根目录，开机再执行一次覆盖。
+ *          原始文件备份见 gr2-analysis/out/bootimg/dvf_TDSt_原始.brp
+ *          （614,400 字节，sha256 前缀 cc3b8256cc2ae1e28baf60b2d16fdc24）
+ *
+ *  【注意】
+ *    只覆盖 dvf_TDSt.brp（开机画面）。
+ *    不要动 dvf_mark.brp —— 那是 FCC/CE/IC 认证标签，改动后设备不再符合原认证声明。
+ * =========================================================================== */

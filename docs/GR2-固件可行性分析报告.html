@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>理光 GR II 固件可行性分析报告</title>
+<style>
+  :root{
+    --bg:#f7f7f5; --card:#ffffff; --line:#e3e2dd; --line2:#d5d4ce;
+    --tx:#1f1f1d; --tx2:#5f5e5a; --tx3:#8a8880;
+    --ok:#0f6e56; --okbg:#e1f5ee; --warn:#854f0b; --warnbg:#faeeda;
+    --bad:#a32d2d; --badbg:#fcebeb; --info:#185fa5; --infobg:#e6f1fb;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);
+    font:15px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:900px;margin:0 auto;padding:48px 28px 80px}
+  h1{font-size:27px;font-weight:600;margin:0 0 8px;letter-spacing:-.01em}
+  .sub{color:var(--tx2);font-size:14px;margin-bottom:28px}
+  h2{font-size:19px;font-weight:600;margin:44px 0 14px;padding-bottom:9px;border-bottom:1px solid var(--line2)}
+  h3{font-size:15px;font-weight:600;margin:26px 0 8px}
+  p{margin:12px 0}
+  code{font-family:var(--mono);font-size:12.5px;background:#efeee9;padding:1.5px 5px;border-radius:4px;color:#3a3a37}
+  pre{font-family:var(--mono);font-size:12.5px;background:#22221f;color:#e8e6df;
+    padding:16px 18px;border-radius:10px;overflow-x:auto;line-height:1.6;margin:14px 0}
+  pre .c{color:#8f8d84}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:16px 0}
+  .verdict{border-left:4px solid var(--warn);background:var(--warnbg)}
+  .verdict strong{color:var(--warn)}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  th{background:#efeee9;font-weight:600;font-size:12.5px;color:var(--tx2);
+     text-transform:none;letter-spacing:.02em}
+  tr:last-child td{border-bottom:none}
+  td.m{font-family:var(--mono);font-size:12px}
+  .yes{color:var(--ok);font-weight:600}
+  .no{color:var(--bad);font-weight:600}
+  .part{color:var(--warn);font-weight:600}
+  .pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;
+    background:var(--infobg);color:var(--info);margin-right:6px}
+  .pill.ok{background:var(--okbg);color:var(--ok)}
+  .pill.bad{background:var(--badbg);color:var(--bad)}
+  .pill.warn{background:var(--warnbg);color:var(--warn)}
+  ul{margin:10px 0;padding-left:22px}
+  li{margin:6px 0}
+  .hint{color:var(--tx3);font-size:12.5px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:660px){.grid{grid-template-columns:1fr}}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .kv:last-child{border-bottom:none}
+  .kv span:first-child{color:var(--tx2);font-size:13px}
+  .kv span:last-child{font-family:var(--mono);font-size:12px;text-align:right;word-break:break-all}
+  .step{display:flex;gap:14px;margin:14px 0}
+  .step .n{flex:0 0 26px;height:26px;border-radius:50%;background:#22221f;color:#fff;
+    font-size:12.5px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:2px}
+  .step .b{flex:1}
+  .cols{column-count:3;column-gap:20px;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;padding:14px 18px;margin:14px 0}
+  .jobs{margin:0;padding-left:22px;font-size:11.5px;font-family:var(--mono);line-height:1.55}
+  .jobs li{margin:0;break-inside:avoid}
+  .jobs .m{color:var(--tx3);font-size:10.5px}
+  @media(max-width:720px){.cols{column-count:1}}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line2);
+    color:var(--tx3);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>理光 GR II 固件可行性分析</h1>
+<div class="sub">
+  针对开源项目 <code>radium-wang/ricoh-gr4-firmware-analysis-and-feature-expansion</code> 对 GR II 的适用性 ·
+  基于官方固件 <code>rg2_v003</code> 的离线实测 · 2026-10-03
+</div>
+
+<div class="card verdict">
+  <p style="margin-top:0"><strong>结论：仓库的工具与流程不能直接用于 GR II，但其底层机制与 GR II 同源。</strong></p>
+  <p style="margin-bottom:0">
+    GR II 固件是可解密的（公开工具 + 静态密钥），且固件内部<strong>确实存在与 GR III/IV 同一套 TTL 脚本解释器</strong>，
+    含 <code>filecopy</code> / <code>filesearch</code> / <code>execcmnd</code> 等命令以及 <code>Startup.ttl</code> / <code>Shutdown.ttl</code> 加载路径。
+    但该仓库赖以工作的<strong>入口机制在 GR II 固件中不存在同名实现</strong>——没有 <code>DEVELOP.MOD</code>、没有 <code>OPEN_FACTORY_DEBUG_MENU</code>、
+    没有 GR IV 的关机图资源名。因此现状是：<em>前置条件具备，触发路径未知</em>。
+  </p>
+</div>
+
+<div class="card" style="border-left:4px solid var(--ok);background:var(--okbg)">
+  <p style="margin-top:0"><strong style="color:var(--ok)">第二轮（固件层逆向）新增结论 —— 结论已向上修正：</strong></p>
+  <ul style="margin-bottom:0">
+    <li><strong>架构确认</strong>：载荷为 <strong>ARM 大端（BE-32）+ Thumb-2</strong>；<code>b01firm8.bin</code> 装载基址
+        <strong>0xa0020200 + 文件内偏移</strong>（等价于 <code>0xa0020400 + 加载表偏移</code>，二者相差文件头 0x200）。</li>
+    <li><strong>资源层已完全掌握</strong>：<code>b01firm6.bin</code> 是机内 <strong>A: 盘的完整文件镜像</strong>，
+        121 个条目（名称 / 偏移 / 大小）全部解出，可直接定位与替换。</li>
+    <li><strong>脚本能力已被证实</strong>：镜像内含理光<strong>出厂 TTL 脚本</strong> <code>A:/update.ttl</code>，
+        且脚本通过 <code>syscom get/set &lt;index&gt; &lt;value&gt;</code> 读写系统配置 —— 与 GR IV 工厂脚本接口同一设计思路。</li>
+    <li><strong>触发门控已定位到函数与字段</strong>：<code>*:/Startup.ttl</code> 由
+        <strong>job 0 的启动阶段处理函数</strong>（<code>0xa00e879a</code>）加载，其上游存在由
+        <code>ctx+0x68 / +0x78 / +0x7c</code> 三个字段构成的合取门控。</li>
+  </ul>
+  <p style="margin-bottom:0" class="hint">
+    缺口从"机制是否存在"缩小为"哪条用户动作置位这三个上下文字段"。详见第 7 章。
+  </p>
+</div>
+
+<div class="card" style="border-left:4px solid var(--ok);background:var(--okbg)">
+  <p style="margin-top:0"><strong style="color:var(--ok)">第三轮（作业调度与控制台）新增结论 —— 这是本轮最重要的发现：</strong></p>
+  <ul style="margin-bottom:0">
+    <li><strong>整机作业调度表已被完整解出</strong>：105 条 <code>JOBID_*</code> 条目（表索引 = 作业号），
+        覆盖开机 / 关机 / 拍摄 / 播放 / 固件升级全部状态机。</li>
+    <li><strong><code>Startup.ttl</code> 与 <code>Shutdown.ttl</code> 的归属已确认</strong>：前者在 job 0
+        的启动阶段函数内，后者在 <code>JOBID_SHUTDOWN</code>（作业 9）函数内——两者都是相机自身开/关机流程的一环。</li>
+    <li><strong>固件内含两套"工厂界面"</strong>：一套<strong>产线测试控制台</strong>（1–10 项测试 + <code>all</code> / <code>set</code> / <code>show</code>），
+        一套<strong>宿主端调试 shell</strong>（<code>comp</code> / <code>read</code> / <code>write</code> / GPIO 控制，传输可选 <code>uart</code> 或 <code>ptp</code>）。</li>
+    <li><strong>固件升级链路已还原</strong>：<code>Install Files → Run Update Script(E:/A:/H:/update.ttl) → fsys stop → fe -e → fsys start → up -noreboot</code>，
+        并有独立作业 <code>JOBID_CHECK_FW_FILE</code> / <code>JOBID_FW_UPDATE</code>。</li>
+  </ul>
+  <p style="margin-bottom:0" class="hint">
+    意义：GR II 缺少的不是"脚本能力"，而是 GR IV 那种<strong>卡内触发文件</strong>；
+    它走的是<strong>控制台 / shell 通道</strong>。详见第 8 章。
+  </p>
+</div>
+
+<h2>1 · 能力对照：仓库的四个支柱在 GR II 上的状态</h2>
+
+<table>
+  <thead>
+    <tr><th style="width:26%">仓库能力</th><th style="width:12%">GR II</th><th>实测依据</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>固件容器解析<br><span class="hint">inspect_firmware.py</span></td>
+      <td class="no">不可用</td>
+      <td>GR II 用 <code>UNITY FILE V1.10</code> 容器，而该工具按 GR IV 的 LZSS 帧格式解码。
+          在 0x100–0x4000 区间共 192 个候选偏移逐一试解，<strong>全部产出 0 字节</strong>。</td>
+    </tr>
+    <tr>
+      <td>产品 ID 识别<br><span class="hint">gr4_model.py</span></td>
+      <td class="no">不可用</td>
+      <td>白名单只有 <code>0x132E0</code>/<code>0x132E1</code>/<code>0x13330</code> 与魔数 <code>A55A5AA5</code>，GR II 不在其中。</td>
+    </tr>
+    <tr>
+      <td>工厂菜单入口<br><span class="hint">create_factory_entry.py</span></td>
+      <td class="no">不可用</td>
+      <td>GR IV 依赖 <code>00078560.636</code> + <code>DEVELOP.MOD</code>（10 字节定值）。
+          GR II 两份明文载荷中 <strong>均无这些字符串</strong>，且入口文件名本身是固件特定的。</td>
+    </tr>
+    <tr>
+      <td>TTL 脚本引擎</td>
+      <td class="part">存在</td>
+      <td>GR II 明文中含完整 Tera Term Language 命令表（<code>b01firm8.bin</code> @0x590C00），
+          与仓库所述 GR IV 解释器为同一命令族。</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>换言之：仓库覆盖的四个支柱里，三个是 GR IV 专属的封装层，只有最底层的脚本引擎在 GR II 上同样存在。</p>
+
+<h2>2 · 实测证据链</h2>
+
+<h3>2.1 样本与哈希</h3>
+<div class="card">
+  <div class="kv"><span>来源</span><span>ricoh-imaging.co.jp/english/support/digital/firmware/rg2_v003.zip</span></div>
+  <div class="kv"><span>rg2_v003.zip</span><span>8,741,347 B · sha256 76d28c8e48c37123f226b8aa6d236e23655146bc08070738d9e734290ea6b13d</span></div>
+  <div class="kv"><span>rg2_v003.frm</span><span>14,033,920 B · sha256 3643850f2ae74ae967eb336794048f554caa1b11d05b8569824d5719f1838331</span></div>
+</div>
+
+<h3>2.2 容器结构：双层 UNITY FILE</h3>
+<p>文件头为 <code>UNITY FILE V1.10 / RICOH COMPANY</code>，目录表为 64 字节定长条目（条目长度与 2048 字节头对齐），
+描述符字段<strong>大端序</strong>，<code>bstart</code> 以 512 字节块为单位：</p>
+
+<table>
+  <thead><tr><th>层级</th><th>条目名</th><th>起始</th><th>长度</th><th>模式</th></tr></thead>
+  <tbody>
+    <tr><td>第 1 层</td><td class="m">b01firm6.bin</td><td class="m">块 4 → 0x800</td><td class="m">7,896,704 B</td><td class="m">encrypted</td></tr>
+    <tr><td>第 1 层</td><td class="m">rg2_v001up.bin</td><td class="m">块 15428 → 0x788800</td><td class="m">6,134,784 B</td><td class="m">container</td></tr>
+    <tr><td>第 2 层</td><td class="m">b01firm8.bin</td><td class="m">紧随头部</td><td class="m">6,132,308 B</td><td class="m">encrypted</td></tr>
+  </tbody>
+</table>
+
+<h3>2.3 加密方案：512 字节块 · 单字 XOR · 步进密钥</h3>
+<p>先于工具只见高熵数据，实测发现三条互相印证的线索，随后与公开实现完全吻合：</p>
+<ul>
+  <li>全文件字节分布近乎完美均匀（熵 <strong>7.9998</strong> bits/byte，256 个取值均匀分布）——但 deflate 仍能压缩 <strong>38%</strong>。</li>
+  <li>存在 <strong>5311 段、长度恒为 512 的 4 字节周期结构</strong>，其中 3207 段严格落在 <code>offset % 512 == 0</code> 栅格上，且每段对应一个<em>互不相同</em>的 4 字节单元。</li>
+  <li>这两点只能由「每 512 字节整块被一个 32 位字异或」解释：明文中的常量填充区（如全 0xFF）在密文中变成该块唯一密钥的周期重复，
+      于是既拉高了字节熵，又给 LZ77 提供了长匹配。</li>
+</ul>
+<p>公开解码器 <code>jokob/ricohdec</code> 的实现与上述推断一致：块密钥自 <code>0xF8E69612</code> 起，
+每块递增 <code>0xBE39B193</code>，逐 32 位字异或。解码后熵降至 <strong>6.0956</strong>（b01firm6）/ <strong>6.4524</strong>（b01firm8），
+可读字符串从 2.6% 升至 10.4%，模块名 <code>R_RG2_REFLECTOR</code> 可直接读出。</p>
+
+<h3>2.4 GR II 明文中的脚本与接口证据</h3>
+<div class="card">
+  <p style="margin-top:0"><strong>TTL 命令表</strong> —— <code>b01firm8.bin</code> @ <code>0x590C00</code>：</p>
+  <pre><span class="c">… basename · call · code2str · do · dispstr · dirname · else · elseif · end · endif
+· enduntil · endwhile · execcmnd · exit · fileclose · fileconcat · filecopy
+· filecreate · filedelete · filemarkptr · fileopen · filereadln · fileread
+· filerename · filesearch · fileseek · fileseekback · filestat · filestrseek …</span></pre>
+  <p class="hint" style="margin-bottom:0">
+    注：<code>dispstr</code>、<code>code2str</code>、<code>filemarkptr</code>、<code>filestrseek</code>、<code>enduntil</code>
+    属 Tera Term 专有宏命令，可排除「通用脚本引擎」的可能。另需区分：固件中另有
+    <code>EXT_FLASH_MODE_TTL</code>，那是闪光灯的「镜后测光」模式，与脚本无关。
+  </p>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h3 style="margin-top:0">脚本加载路径</h3>
+    <div class="kv"><span>启动脚本</span><span>*:/Startup.ttl</span></div>
+    <div class="kv"><span>关机脚本</span><span>*:/Shutdown.ttl</span></div>
+    <div class="kv"><span>升级脚本</span><span>E:/update.ttl · A:/update.ttl · H:/update.ttl</span></div>
+    <div class="kv"><span>备份 / 调整</span><span>H:/backup.ttl · H:/RADJ/%s/Adjust.ttl</span></div>
+    <div class="kv"><span>脚本任务名</span><span>StopScript · PauseScript</span></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">盘符映射（实测字符串）</h3>
+    <div class="kv"><span>A:</span><span>机内资源库 adj / fix / isp / cpu1 / audio / img / font / video</span></div>
+    <div class="kv"><span>B:</span><span>用户设置 P_COMMON.bin · P_MY00.bin · Invent.bin</span></div>
+    <div class="kv"><span>H:</span><span>SD 卡 H:/DCIM/%03dRICOH/R001%04d.JPG</span></div>
+    <div class="kv"><span>E:</span><span>E:/liveview.jpg · E:/update.ttl</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0">额外的工程接口（GR IV 文档未涉及）</h3>
+  <ul style="margin-bottom:0">
+    <li><strong>机内 shell</strong>：<code>RegisterCommands</code> · <code>Shell_Execute</code> · <code>Shell_MemoryDump</code> ·
+        <code>shell_nandrw</code> · <code>shell_drvread</code> · <code>Shell_Execute</code> 配 ANSI 颜色输出 <code>[1;31m</code>（真实控制台）。
+        另有 PTP 侧 <code>JobShellExecute</code>。</li>
+    <li><strong>命令输入源</strong>：<code>A:/command.txt</code> 被 shell 读取。</li>
+    <li><strong>资源库内含</strong>：<code>A:/fix/</code> 下有 <code>Hack_F.bin</code>、<code>Sys_F.bin</code>、<code>LCD_F.bin</code> 等出厂固定文件；
+        <code>A:/isp/</code> 下有 <code>black.jpg</code>、<code>recmovie.jpg</code>。</li>
+    <li><strong>调试输出</strong>：<code>camera mode : %02x</code>，说明 GR II 同样存在相机模式状态（与 GR IV 的 Normal/Debug 概念同构，但实现未验证）。</li>
+    <li><strong>构建标识</strong>：<code>RC2015 Digital Camera Development</code>、<code>R_RG2_UPDATED!!!</code>、
+        升级脚本内 <code>UPDATE_VER.= $00000115</code>、脚本头 <code>© 2011-2015 RICOH</code>。</li>
+  </ul>
+</div>
+
+<h3>2.5 明确不存在的部分</h3>
+<p>在两份明文载荷中检索下列 GR IV 专属标识，<strong>命中数均为 0</strong>：
+<code>DEVELOP.MOD</code> · <code>OPEN_FACTORY_DEBUG_MENU</code> · <code>00078560.636</code> · <code>GoodBye</code>（不区分大小写）·
+<code>BlkCtl15.bin</code> · <code>SHELLCMD</code> · <code>milbeaut</code> · <code>sc2000</code> · <code>Linux</code> / 设备树 / U-Boot（GR IV 有内嵌 Linux，GR II 未见）。</p>
+
+<h2>3 · 复现步骤</h2>
+
+<div class="step"><div class="n">1</div><div class="b">
+  取得官方固件（自行从理光官网下载，需遵守其条款，本项目不代为分发）：
+  <pre>curl -L -o rg2_v003.zip \
+  https://www.ricoh-imaging.co.jp/english/support/digital/firmware/rg2_v003.zip
+unzip rg2_v003.zip        <span class="c"># → rg2_v003/rg2_v003.frm (14,033,920 B)</span></pre>
+</div></div>
+
+<div class="step"><div class="n">2</div><div class="b">
+  编译并使用公开解码器（<code>jokob/ricohdec</code>，约 120 行 C）：
+  <pre>cc -o ricohdec ricohdec.c
+./ricohdec rg2_v003.frm     <span class="c"># → b01firm6.bin + rg2_v001up.bin</span>
+./ricohdec rg2_v001up.bin   <span class="c"># → b01firm8.bin</span></pre>
+  本次实测输出：<code>dircount=2</code> → <code>flen=7896704 b01firm6.bin mode=encrypted</code>、
+  <code>flen=6134784 rg2_v001up.bin mode=container</code> → <code>flen=6132308 b01firm8.bin mode=encrypted</code>。
+</div></div>
+
+<div class="step"><div class="n">3</div><div class="b">
+  在明文上做接口检索（本次使用的脚本位于 <code>gr2-analysis/out/</code>）：
+  <pre>strings -a -n 5 b01firm8.bin | grep -E "filecopy|Startup|Shutdown|Shell"</pre>
+</div></div>
+
+<p class="hint">全过程为纯离线只读：未连接相机、未写入任何介质、未生成任何可安装固件。</p>
+
+<h2>4 · 与 GR IV 的逐项对照</h2>
+
+<table>
+  <thead><tr><th style="width:24%">维度</th><th style="width:38%">GR II（2015）</th><th>GR IV（2025+）</th></tr></thead>
+  <tbody>
+    <tr><td>容器</td><td><code>UNITY FILE V1.10</code>，双层</td><td><code>fwdc248b.bin</code>，单一容器</td></tr>
+    <tr><td>载荷状态</td><td>加密（块 XOR，静态密钥）</td><td>未加密，可直接读字符串与设备树</td></tr>
+    <tr><td>体积</td><td>14.03 MB / 明文 14.03 MB</td><td>38.65 MB</td></tr>
+    <tr><td>系统</td><td>单一 RTOS（RC2015 平台），未见 Linux</td><td>Milbeaut SC2000A + RTOS + 嵌入式 Linux</td></tr>
+    <tr><td>脚本引擎</td><td class="yes">有（Tera Term TTL 同族）</td><td class="yes">有</td></tr>
+    <tr><td>脚本加载</td><td><code>*:/Startup.ttl</code>（盘符式）</td><td><code>script/startup.ttl</code>（SD 相对路径）</td></tr>
+    <tr><td>工厂入口</td><td class="no">未发现</td><td class="yes">MENU+电源，已验证</td></tr>
+    <tr><td>关机图资源</td><td class="no">未见同名资源</td><td><code>A:\Resource\Jpeg\GoodBye.jpg</code></td></tr>
+    <tr><td>公开分析工具</td><td class="yes">ricohdec（已可用）</td><td class="yes">本仓库工具链</td></tr>
+  </tbody>
+</table>
+
+<p>一个反直觉但重要的结论：<strong>GR IV 固件比 GR II 更易分析</strong>——GR IV 载荷未加密，GR II 反而套了一层可解但需要额外一步的块加密。</p>
+
+<h2>5 · 风险与边界</h2>
+<ul>
+  <li><strong>不要照搬仓库流程</strong>。把 GR IV 的 <code>00078560.636</code> / <code>DEVELOP.MOD</code> 放进 GR II 的 SD 卡没有意义；
+      目标路径与入口都是固件特定的，误写机内资源存在风险。</li>
+  <li><strong>本报告未做任何设备侧验证</strong>。全部结论来自离线静态分析，<em>不等于</em> GR II 上可以真正加载并执行 Startup 脚本。
+      「固件里存在 TTL 解释器」与「能够在 GR II 上触发它」是两件事。</li>
+  <li><strong>版本与样本绑定</strong>。本次结论仅对应 <code>rg2_v003</code>（2016-06-28 构建）。其他版本需重新核验哈希与偏移。</li>
+  <li><strong>法律与授权</strong>。固件版权属理光，下载与使用受其条款约束；该仓库自身采用非商业源码许可（非 OSI 开源），商用需另行取得书面许可。</li>
+</ul>
+
+<h2>6 · 未解决问题与建议路径</h2>
+<ol>
+  <li><strong>核心缺口：如何触发 <code>Startup.ttl</code>。</strong>
+      需要逆向 GR II 的脚本加载状态机——即哪个持久化标志位、经由哪条菜单或按键路径被置位。
+      这是唯一决定「能否落地」的问题。</li>
+  <li><strong>次生缺口：是否存在进入工厂/调试菜单的入口。</strong>
+      GR II 明文中存在 <code>camera mode : %02x</code> 与 <code>A:/fix/</code> 出厂文件组，
+      提示有对应机制，但入口方式未定位。</li>
+  <li><strong>可低成本推进的方向</strong>：以 <code>b01firm8.bin</code> 的加载地址表为锚点做重定位分析，
+      定位脚本加载函数与 <code>Startup.ttl</code> 字符串的交叉引用。</li>
+  <li><strong>若目标是尽快出成果</strong>，建议改在 GR IV 或 GR IIIx Urban 上按仓库流程操作——路径已验证，
+      而 GR II 属于「需要先完成一轮独立逆向」的课题。</li>
+</ol>
+
+<h2>7 · 第二轮：固件层逆向结果</h2>
+
+<h3>7.1 架构与地址空间</h3>
+<p>载荷为 <strong>ARM 大端</strong>指令集（BE-32），代码区混用 ARM 与 Thumb-2。三项独立验证：</p>
+<ul>
+  <li>头部的版本、日期、长度字段均为<strong>大端序</strong>（构建日期 <code>0x20160628</code>、时间 <code>0x00190639</code>），
+      与容器目录条目一致，也与理光/宾得固件的大端传统吻合。</li>
+  <li>偏移 <code>0x400</code> 处为标准 ARM 异常模式初始化序列：连续 5 组 <code>msr cpsr_c, #0xd3/#0xdb/#0xd7/#0xd1/#0xd2</code>
+      紧跟 <code>ldr sp, [pc, …]</code>，覆盖 SVC / UND / ABT / FIQ / IRQ 五个模式。</li>
+  <li>Thumb-2 解码在 <code>0xc9000</code> 起连续覆盖 512/512 字节且出现函数序言
+      <code>push {r0,r1,r2,r4,r5,r6,r7,lr}</code>，排除误判为数据的可能。</li>
+</ul>
+<p><code>b01firm8.bin</code> 的加载表为 5 字一组的大端记录 <code>(file_offset, dest1, size1, dest2, size2)</code>，
+数据按 1024 字节对齐。前 16 组有效条目全部满足同一条映射：</p>
+<pre>runtime address = 0xa0020400 + <b>加载表偏移</b>          <span class="c"># 16/16 组吻合</span>
+runtime address = 0xa0020200 + <b>文件内偏移</b>          <span class="c"># 等价写法</span></pre>
+<p class="hint">交叉验证例：第 1 组 <code>表偏移 0x0 → 0xa0020400</code>；第 2 组 <code>表偏移 0xa4800 → 0xa00c4c00</code>
+；第 3 组 <code>表偏移 0x10bc00 → 0xa012c000</code>。三组均满足 <code>dest1 − 表偏移 = 0xa0020400</code>。</p>
+<div class="card" style="border-left:4px solid var(--warn);background:var(--warnbg)">
+  <p style="margin-top:0"><strong>地址基准修正（第三轮）</strong></p>
+  <p style="margin-bottom:0">上一轮把两种偏移混用，导致所有由<strong>文件内容</strong>反推的运行时地址整体高出 <code>0x200</code>。
+  加载表的 <code>file_offset</code> 字段是<strong>从文件头 0x200 之后起算</strong>的，而按搜索结果定位字符串 / 代码得到的是<strong>真实文件偏移</strong>。
+  两者相差一个 512 字节头。现已用两条互相独立的证据钉死：</p>
+  <ul style="margin-bottom:0">
+    <li>字符串 <code>"JOBID_BOOT"</code> 位于真实文件偏移 <code>0x0F5580</code>，而作业调度表存的指针是
+        <code>0xa0115780 = 0xa0020200 + 0x0F5580</code>。</li>
+    <li>shell 命令串 <code>"set res uart (CH) (BAUD) (TXRES) (RXRES)"</code> 位于真实文件偏移 <code>0x0A19FB</code>，
+        其参数表项指针 <code>0xa00c1e09</code> 与 <code>0xa0020200 + 0x0A1C09</code> 一致。</li>
+  </ul>
+</div>
+<p class="hint">本报告第 7 章中由内容反推的地址已按新基准修正（旧值 +0x200 即为旧记录）；
+第 8 章全部采用修正后基址。</p>
+
+<h3>7.2 b01firm6.bin 是机内 A: 盘的完整文件镜像</h3>
+<p>镜像内 <code>0x786000</code> 起是目录表，121 条 <strong>64 字节</strong>定长条目：</p>
+<pre>struct entry {           <span class="c">/* 64 bytes */</span>
+    char     name[32];   <span class="c">/* "A:/fix/Sys_F.bin" 等，null 填充 */</span>
+    uint32_t image_offset;   <span class="c">/* 大端，512 字节对齐 */</span>
+    uint32_t size;           <span class="c">/* 大端 */</span>
+    uint8_t  ident[12];      <span class="c">/* 条目间近乎相同，语义未定 */</span>
+    uint32_t flags;          <span class="c">/* 全部为 0x01000000 */</span>
+    uint8_t  reserved[8];
+};</pre>
+<table>
+  <thead><tr><th>顶层目录</th><th>文件数</th><th>占用字节</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td class="m">font/</td><td>14</td><td class="m">3,786,250</td><td>多语言位图字体（CN_S / CN_T / JP / KR / Latin / TH / Moni）</td></tr>
+    <tr><td class="m">img/</td><td>4</td><td class="m">1,896,992</td><td><code>dvf_mark.brp</code>、<code>dvf_key.brp</code> 等 600 KB 级图像块</td></tr>
+    <tr><td class="m">isp/</td><td>6</td><td class="m">1,428,842</td><td>图像处理参数、<code>black.jpg</code>、<code>recmovie.jpg</code></td></tr>
+    <tr><td class="m">cpu1/</td><td>1</td><td class="m">639,192</td><td><code>cp1.bin</code>（第二处理器固件）</td></tr>
+    <tr><td class="m">video/</td><td>51</td><td class="m">3,910</td><td>OSD 叠加层参数（小文件，按视频模式命名）</td></tr>
+    <tr><td class="m">fix/</td><td>22</td><td class="m">10,928</td><td>出厂固定值，含 <code>Hack_F.bin</code>、<code>Sys_F.bin</code>、<code>LCD_F.bin</code></td></tr>
+    <tr><td class="m">adj/</td><td>11</td><td class="m">2,132</td><td>校准值（AE / AF / AWB / Lens / Sensor / Accel …）</td></tr>
+    <tr><td class="m">audio/</td><td>10</td><td class="m">31,520</td><td>提示音与音效 <code>.wav</code></td></tr>
+    <tr><td class="m">(root)</td><td>2</td><td class="m">41,723</td><td><code>A:/command.txt</code>、<code>A:/update.ttl</code></td></tr>
+  </tbody>
+</table>
+<p class="hint">完整清单见同目录 <code>out/A盘资源清单.md</code>。
+注意 <code>black.jpg</code> 与 <code>recmovie.jpg</code> 尽管以 <code>.jpg</code> 结尾，内容<strong>并非标准 JPEG</strong>
+（前者是 16 位递减斜坡，后者自零开始），说明直接替换为普通 JPEG 不会生效。</p>
+
+<h3>7.3 出厂 TTL 脚本与 syscom 配置接口</h3>
+<p><code>A:/update.ttl</code>（4,598 字节）是理光随固件出厂的脚本，头注为
+<code>@date 12SEP12 Y.Watanabe(RICOH)</code>、<code>Copyright(C) 2011-2015 by RICOH COMPANY, LTD.</code>。
+正文可读，节选：</p>
+<pre>:Main
+    call updateCom
+    call dispVer
+    call deleFixFile
+    end
+
+:updateCom
+    sprintf "syscom reload"
+    sendln inputstr
+    sprintf "syscom get 0 "
+    sendln inputstr
+    if result != UPDATE_VER then          <span class="c">; 版本不符</span>
+        sprintf "syscom set 0 0x%x" UPDATE_VER
+        sendln inputstr
+        sprintf "syscom get 1 "                <span class="c">; brlEnable(保持)</span>
+        sendln inputstr
+        ...
+        sprintf "syscom set 2 0x06E"           <span class="c">; tmpErr</span>
+        sendln inputstr
+        sprintf "syscom set 3 594"             <span class="c">; volErrLow</span></pre>
+<p>三点意义：</p>
+<ul>
+  <li>脚本可使用 Tera Term 的 <code>sprintf</code> / <code>sendln</code> / <code>inputstr</code> / <code>call</code> / <code>end</code>
+      与控制流语法，即 GR IV 那套 TTL 解释器在 GR II 上<strong>真的会被执行</strong>（这是出厂脚本，不是死代码）。</li>
+  <li>存在结构化的系统配置接口 <code>syscom get / set &lt;index&gt; &lt;value&gt;</code>，
+      索引 <code>0</code>=版本、<code>1</code>=<code>brlEnable</code>、<code>2</code>=<code>tmpErr</code>、<code>3</code>=<code>volErrLow</code>。</li>
+  <li>脚本带版本常量 <code>UPDATE_VER = $00000115</code>，说明这套脚本机制自 2011 年起跨机型沿用。</li>
+</ul>
+
+<h3>7.4 Startup.ttl 的门控代码</h3>
+<p><code>*:/Startup.ttl</code>（运行时地址 <code>0xa00e934b</code>）与 <code>*:</code>、<code>script %s</code>、
+<code>H:/RADJ/%s/Adjust.ttl</code> 同处一个<strong>函数内联字面量池</strong>（该池同时含指针
+<code>0xa00e84af</code>、<code>0xa012a0f4</code>、<code>0xa06c1cf4</code>、<code>0xa012a0ec</code>
+与常量 <code>0x25e</code>、<code>0x257</code>、<code>0x2d7</code>、<code>0x23b</code>）。</p>
+<p>其上游存在一条门控序列，反复调用访问器 <code>0xa00e5f20</code> 取得上下文指针后逐个检查字段：</p>
+<pre>0xa00e9234: bl  0xa00e5f20            <span class="c">; 取上下文 ctx</span>
+0xa00e9238: ldr r0, [r0, #0x68]
+0xa00e923a: cmp r0, #0
+0xa00e923c: beq 0xa00e92a6            <span class="c">; ctx+0x68 == 0 -> 跳过</span>
+0xa00e9242: ldr r0, [r0, #0x78]
+0xa00e9246: beq 0xa00e92a6            <span class="c">; ctx+0x78 == 0 -> 跳过</span>
+0xa00e924c: ldr r0, [r0, #0x7c]
+0xa00e9250: beq 0xa00e92a6            <span class="c">; ctx+0x7c == 0 -> 跳过</span></pre>
+<p>三个 <code>beq</code> 的目标<strong>完全相同</strong>，说明这是纯粹的<strong>合取条件</strong>（AND）：四个条件全非零才继续执行。
+门控之前还有一道 <code>ldr r0,[r4,#4] / bne 跳过</code>，即共 <strong>四个</strong>条件。</p>
+<p>上下文指针本身来自字面量池中的常量 <code>0xa06bddf4</code>，该值在整份 <code>b01firm8.bin</code> 中
+<strong>仅出现一次</strong>（就在访问器的池里），说明它由访问器统一发放、不会在各处重复硬编码。
+第 8 章定位到该访问器与门控所在函数的身份。</p>
+
+<h3>7.5 缺口收窄</h3>
+<table>
+  <thead><tr><th style="width:30%">问题</th><th style="width:14%">第一轮</th><th>第二轮</th></tr></thead>
+  <tbody>
+    <tr><td>固件可分析性</td><td class="no">未知</td><td class="yes">已解密，ARM 大端 + Thumb-2，基址 0xa0020200</td></tr>
+    <tr><td>机内资源是否可枚举</td><td class="no">未知</td><td class="yes">121 个文件全量解出（名称/偏移/大小）</td></tr>
+    <tr><td>TTL 脚本是否可用</td><td class="part">推断存在</td><td class="yes">出厂 <code>update.ttl</code> 为证，含 <code>syscom</code> 配置接口</td></tr>
+    <tr><td>Startup.ttl 触发条件</td><td class="no">完全未知</td><td class="part">已定位门控函数与三个字段偏移，置位者待查</td></tr>
+  </tbody>
+</table>
+
+<h3>7.6 本轮仍未解决的问题</h3>
+<ol>
+  <li>上下文结构 <code>ctx+0x68 / +0x78 / +0x7c</code> 的语义，以及<strong>由谁置位</strong>——这是唯一剩下的关键问题。</li>
+  <li>未找到与 GR IV <code>DEVELOP.MOD</code> / <code>00078560.636</code> 对应的入口文件；
+      GR II 是否也有一套"卡内触发文件"机制尚无证据。</li>
+  <li><code>A:/command.txt</code>（37,125 字节）内容非文本，疑为编译或编码产物，未解码。</li>
+  <li>条目结构中的 12 字节 <code>ident</code> 字段各条目近乎相同，语义未定。</li>
+  <li>本轮所有结论仍为<strong>静态分析</strong>，相机侧零验证。</li>
+</ol>
+
+<h2>8 · 第三轮：作业调度表与工厂控制台</h2>
+
+<h3>8.1 整机作业调度表：105 条 JOBID</h3>
+<p>在 <code>b01firm8.bin</code> 真实文件偏移 <code>0x0EF488</code> 处发现一张定长 <strong>8 字节</strong>记录表，
+每条为 <code>{char* name, void* handler}</code>（大端）：</p>
+<pre>struct job_entry {          <span class="c">/* 8 bytes, 大端 */</span>
+    uint32_t name;          <span class="c">/* -> "JOBID_BOOT" 等，位于 0xa01157xx 起的名称池 */</span>
+    uint32_t handler;       <span class="c">/* Thumb 地址，位于 0xa00e87xx..0xa00ec0xx 代码区 */</span>
+};</pre>
+<p>表索引即<strong>作业号</strong>，共解出 <strong>105 条</strong>，命名池与代码地址双向吻合（名称池中
+<code>"JOBID_BOOT"</code> 紧接 <code>"refresh"</code> 之后，与条目 0 / 1 一一对应）。
+这也是上一节地址基准修正的第二条独立证据。</p>
+<div class="cols">
+  <ol class="jobs" start="0">
+    <li>refresh <span class="m">0xa00e879a</span></li>
+    <li>JOBID_BOOT <span class="m">0xa00e92bc</span></li>
+    <li>JOBID_MODE_CHANGE <span class="m">0xa00e9e3c</span></li>
+    <li>JOBID_MODE_PENDING <span class="m">0xa00e9e7c</span></li>
+    <li>JOBID_MODE_CANCEL <span class="m">0xa00e9eba</span></li>
+    <li>JOBID_FUNC_PENDING <span class="m">0xa00e9ac8</span></li>
+    <li>JOBID_DIAL <span class="m">0xa00e9af8</span></li>
+    <li>JOBID_MEMORY_MAP <span class="m">0xa00e9b6e</span></li>
+    <li>JOBID_PARSE_KEY <span class="m">0xa00e9a80</span></li>
+    <li>JOBID_SHUTDOWN <span class="m">0xa00e98b8</span></li>
+    <li>JOBID_POWER_OFF <span class="m">0xa00e9db8</span></li>
+    <li>JOBID_COMPLETE <span class="m">0xa00e9dde</span></li>
+    <li>JOBID_PROGRESS <span class="m">0xa00e9ee2</span></li>
+    <li>JOBID_ERROR <span class="m">0xa00e9dfa</span></li>
+    <li>JOBID_BUSY <span class="m">0xa00e9f58</span></li>
+    <li>JOBID_EXTRACT <span class="m">0xa00e9f80</span></li>
+    <li>JOBID_RETRACT <span class="m">0xa00e9fbe</span></li>
+    <li>JOBID_BEEP <span class="m">0xa00e9ffc</span></li>
+    <li>JOBID_PM_LOCK <span class="m">0xa00ea09c</span></li>
+    <li>JOBID_INITIAL_BOOT_COMPLETED <span class="m">0xa00ea19a</span></li>
+    <li>JOBID_PROCESSING <span class="m">0xa00ea1aa</span></li>
+    <li>JOBID_USB_CHARGE <span class="m">0xa00ea026</span></li>
+    <li>JOBID_WIFI <span class="m">0xa00ea264</span></li>
+    <li>JOBID_RELEASE <span class="m">0xa00ea2b8</span></li>
+    <li>JOBID_STORE <span class="m">0xa00ea318</span></li>
+    <li>JOBID_CAPTURE_ABORT <span class="m">0xa00ea342</span></li>
+    <li>JOBID_RL_STORE <span class="m">0xa00ea3fe</span></li>
+    <li>JOBID_RL_FLUSH <span class="m">0xa00ea4aa</span></li>
+    <li>JOBID_RECORD <span class="m">0xa00ea4c6</span></li>
+    <li>JOBID_FRAME <span class="m">0xa00ea4f2</span></li>
+    <li>JOBID_RECORD_PAUSE <span class="m">0xa00ea532</span></li>
+    <li>JOBID_ZOOM <span class="m">0xa00ea55a</span></li>
+    <li>JOBID_MACRO <span class="m">0xa00ea5c2</span></li>
+    <li>JOBID_MF_MOVE <span class="m">0xa00ea5de</span></li>
+    <li>JOBID_FOCUS_UPDATE <span class="m">0xa00ea5fa</span></li>
+    <li>JOBID_P_SHIFT <span class="m">0xa00ea618</span></li>
+    <li>JOBID_M_ONE_PUSH <span class="m">0xa00ea634</span></li>
+    <li>JOBID_AEAFL <span class="m">0xa00ea650</span></li>
+    <li>JOBID_AFC <span class="m">0xa00ea66c</span></li>
+    <li>JOBID_DOF_PREVIEW <span class="m">0xa00ea688</span></li>
+    <li>JOBID_MANUAL_WB <span class="m">0xa00ea78c</span></li>
+    <li>JOBID_LEVEL_CALIB <span class="m">0xa00ea7c6</span></li>
+    <li>JOBID_SELF_TIMER_START <span class="m">0xa00ea946</span></li>
+    <li>JOBID_SELF_TIMER_CONTINUE <span class="m">0xa00ea86a</span></li>
+    <li>JOBID_SELF_TIMER <span class="m">0xa00ea9ea</span></li>
+    <li>JOBID_SELF_TIMER_STOP <span class="m">0xa00eaa38</span></li>
+    <li>JOBID_INTVL_TIMER_START <span class="m">0xa00eaae4</span></li>
+    <li>JOBID_INTVL_TIMER <span class="m">0xa00eacd4</span></li>
+    <li>JOBID_INTVL_TIMER_STOP <span class="m">0xa00ead20</span></li>
+    <li>JOBID_INTVL_RESET <span class="m">0xa00ead72</span></li>
+    <li>JOBID_INTVL_PREVIEW <span class="m">0xa00ead8c</span></li>
+    <li>JOBID_SHOOTING_COMMAND <span class="m">0xa00eadfc</span></li>
+    <li>JOBID_MONITORING_STARTED <span class="m">0xa00eae44</span></li>
+    <li>JOBID_CAPTURE_STARTED <span class="m">0xa00eaf52</span></li>
+    <li>JOBID_CAPTURE_COMPLETED <span class="m">0xa00eafc2</span></li>
+    <li>JOBID_NR_STARTED <span class="m">0xa00eafd4</span></li>
+    <li>JOBID_NR_COMPLETED <span class="m">0xa00eafe6</span></li>
+    <li>JOBID_RL_BUSY <span class="m">0xa00eaff8</span></li>
+    <li>JOBID_3A_EVAL_UPDATED <span class="m">0xa00eb014</span></li>
+    <li>JOBID_INTVL_RESET_COMPLETED <span class="m">0xa00eb17c</span></li>
+    <li>JOBID_PLAY_UPDATE <span class="m">0xa00eb1aa</span></li>
+    <li>JOBID_PLAY_ZOOM <span class="m">0xa00eb1f2</span></li>
+    <li>JOBID_PLAY_MOVE <span class="m">0xa00eb3f2</span></li>
+    <li>JOBID_COPY <span class="m">0xa00eb40e</span></li>
+    <li>JOBID_DELETE <span class="m">0xa00eb45c</span></li>
+    <li>JOBID_PROTECT <span class="m">0xa00eb4b0</span></li>
+    <li>JOBID_DPOF_LOAD <span class="m">0xa00eb4cc</span></li>
+    <li>JOBID_DPOF_SAVE <span class="m">0xa00eb246</span></li>
+    <li>JOBID_MOVIE_START <span class="m">0xa00eb26e</span></li>
+    <li>JOBID_MOVIE_STOP <span class="m">0xa00eb296</span></li>
+    <li>JOBID_MOVIE_PAUSE <span class="m">0xa00eb2b2</span></li>
+    <li>JOBID_MOVIE_STEP <span class="m">0xa00eb2d8</span></li>
+    <li>JOBID_MOVIE_FAST_PLAY <span class="m">0xa00eb316</span></li>
+    <li>JOBID_MOVIE_SLOW_PLAY <span class="m">0xa00eb3ae</span></li>
+    <li>JOBID_SLIDESHOW_START <span class="m">0xa00eb3ca</span></li>
+    <li>JOBID_SLIDESHOW_STOP <span class="m">0xa00eb34c</span></li>
+    <li>JOBID_MOVIE_EDIT_UPDATE <span class="m">0xa00eb376</span></li>
+    <li>JOBID_MOVIE_EDIT_EXECUTE <span class="m">0xa00eb392</span></li>
+    <li>JOBID_MOVIE_SNAPSHOT <span class="m">0xa00eb4e8</span></li>
+    <li>JOBID_EDIT_UPDATE <span class="m">0xa00eb516</span></li>
+    <li>JOBID_EDIT_EXECUTE <span class="m">0xa00eb532</span></li>
+    <li>JOBID_PLAY_PENDING <span class="m">0xa00eb674</span></li>
+    <li>JOBID_PLAY_CANCEL <span class="m">0xa00eb6b2</span></li>
+    <li>JOBID_PICTURE_UPDATED <span class="m">0xa00eb70c</span></li>
+    <li>JOBID_SYSTEM_RESET <span class="m">0xa00eb76a</span></li>
+    <li>JOBID_CAMERA_RESET <span class="m">0xa00eb7c6</span></li>
+    <li>JOBID_SHOOTING_RESET <span class="m">0xa00eb7f8</span></li>
+    <li>JOBID_KEY_CUSTOM_RESET <span class="m">0xa00eb82a</span></li>
+    <li>JOBID_NETWORK_RESET <span class="m">0xa00eb858</span></li>
+    <li>JOBID_LEVEL_RESET <span class="m">0xa00eb886</span></li>
+    <li>JOBID_CHECK_FW_FILE <span class="m">0xa00eb976</span></li>
+    <li>JOBID_FW_UPDATE <span class="m">0xa00eb982</span></li>
+    <li>JOBID_FORMAT <span class="m">0xa00eb9b8</span></li>
+    <li>JOBID_FILENO_RESET <span class="m">0xa00eb9d4</span></li>
+    <li>JOBID_CHECK_PIXMAP <span class="m">0xa00eba1a</span></li>
+    <li>JOBID_PIXMAP <span class="m">0xa00eba3c</span></li>
+    <li>JOBID_MYSETTING_SAVE <span class="m">0xa00ebabc</span></li>
+    <li>JOBID_MYSETTING_COPY <span class="m">0xa00ebbf8</span></li>
+    <li>JOBID_MYSETTING_DELETE <span class="m">0xa00ebd54</span></li>
+    <li>JOBID_MYSETTING_EDIT_START <span class="m">0xa00ebdc4</span></li>
+    <li>JOBID_MYSETTING_EDIT_END <span class="m">0xa00ebede</span></li>
+    <li>JOBID_MY_SHOOTING_MODE <span class="m">0xa00ebf08</span></li>
+    <li>JOBID_MYEDIT_BEGIN <span class="m">0xa00ebf62</span></li>
+    <li>JOBID_MYEDIT_REVERT <span class="m">0xa00ebfc8</span></li>
+    <li>JOBID_MYEDIT_COMMIT <span class="m">0xa00ec072</span></li>
+  </ol>
+</div>
+<p class="hint">这张表说明 GR II 是一套<strong>完整的作业状态机固件</strong>，并非"简化版"。
+其中 <code>JOBID_CHECK_FW_FILE</code> / <code>JOBID_FW_UPDATE</code> / <code>JOBID_FORMAT</code> 直接对应固件升级流程。</p>
+
+<h3>8.2 Startup.ttl 与 Shutdown.ttl 的真实归属</h3>
+<p>用函数序言（<code>push {…, lr}</code>）界定边界后，两条脚本的归属非常明确：</p>
+<table>
+  <thead><tr><th>脚本字符串</th><th>所在函数起始</th><th>对应作业</th><th>结论</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="m">W*:/Startup.ttl</td>
+      <td class="m">0xa00e879a</td>
+      <td>条目 <strong>0</strong>「refresh」</td>
+      <td>开机流程的阶段处理函数</td>
+    </tr>
+    <tr>
+      <td class="m">*:/Shutdown.ttl</td>
+      <td class="m">0xa00e98b8</td>
+      <td>条目 <strong>9</strong> <code>JOBID_SHUTDOWN</code></td>
+      <td>关机流程的处理函数</td>
+    </tr>
+  </tbody>
+</table>
+<p>job 0 的入口序言为：</p>
+<pre>0xa00e879a: push {r4, r5, r6, r7, lr}
+0xa00e879c: movs r4, r0
+0xa00e879e: cmp  r0, #0x10          <span class="c">; 参数必须 &lt; 16</span>
+0xa00e87a0: sub  sp, #0x6c
+0xa00e87a2: blt  0xa00e87b4          <span class="c">; 否则触发断言（行号 0x50）</span>
+0xa00e87b4: bl   0xa00e5f20          <span class="c">; 取表基址</span>
+0xa00e87b8: lsls r4, r4, #2          <span class="c">; index * 4</span>
+0xa00e87ba: adds r0, r0, r4
+0xa00e87bc: ldr  r0, [r0, #0x14]     <span class="c">; 表[index].field</span></pre>
+<p><strong>关键推论</strong>：<code>cmp r0,#0x10</code> 把入口参数限制在 <strong>0–15</strong>，
+配合第 7 章解出的 <code>boot.step</code> / <code>boot.isActivated[SECT_CORE … SECT_END]</code> /
+<code>boot.sequenceID</code> 属性族，可以判断 job 0 就是<strong>开机阶段推进器</strong>：
+它以阶段号被反复调用，在某一阶段（三个 ctx 标志均置位时）拉起 <code>W*:/Startup.ttl</code>。</p>
+<p>因此 <code>ctx+0x68 / +0x78 / +0x7c</code> 不是"用户开关"，而更可能是
+<strong>开机阶段计数 / 子系统就绪标志</strong>。这一结论把第一轮"卡内触发文件"的猜想基本排除：
+GR II 的 <code>Startup.ttl</code> 是相机<strong>自身开机流程</strong>的一部分，而不是等待某个外部文件出现。</p>
+
+<h3>8.3 产线测试控制台</h3>
+<p>固件内含一套<strong>产线（QC）测试控制台</strong>，命令为纯文本菜单（原文含理光自己的拼写错误
+<code>upadte</code>）：</p>
+<pre>1   [/s(ilent)] : rtc test(set).
+2   [/s(ilent)] : flash erase test.
+3   [/s(ilent)] : mech driver test.
+4   [/s(ilent)] : ad[0] test.
+5   [/s(ilent)] : accel sensor test.
+6   [/s(ilent)] : usb charge test.
+7   [/s(ilent)] : hdmi test.
+8   [/s(ilent)] : rtc test(check).
+9   [/s(ilent)] : inn drive format test.
+10  [/s(ilent)] : firmware upadte test.
+-1  [/s(ilent)] : power off.
+all [/s(ilent)] : all test.
+set &lt;bad/thl/thh/xd/yd/zd/usb/id/app/res/bak/ipl&gt; value : set parameter.
+show : show parameters</pre>
+<p>意义有三点：</p>
+<ol>
+  <li>这是这台相机的<strong>真实出厂接口</strong>，且**在固件中保留至今**（未做裁剪）。</li>
+  <li><code>set … value</code> 的键名（<code>bad</code> 坏点、<code>thl/thh</code> 温度门限、
+      <code>xd/yd/zd</code> 三轴、<code>usb/id/app/res/bak/ipl</code>）是<strong>可直接改写的产线参数</strong>。</li>
+  <li><code>10 firmware upadte test</code> 与 <code>9 inn drive format test</code> 是<strong>破坏性</strong>命令，
+      误入后风险极高。</li>
+</ol>
+
+<h3>8.4 宿主端调试 shell</h3>
+<p>与测试控制台同区还有一套更底层的 shell，含宿主侧文件传输与 GPIO 操作：</p>
+<pre>comp [-s filesize] [-f filename]
+read [-f filename]
+write [-r] [-s filesize] [-f filename]
+[-i] open [resource file]
+close
+read / write &lt;param1&gt; [param2]...
+tmout &lt;millisecond&gt;
+set uart (CH) (BAUD) (TXRES) (RXRES)
+set res timer (CH) (IRQRES)
+set res adc (VCH) (FCH)
+set res usb (PREG) (PMSK) (PVAL)
+set res susp (PREG) (PMSK) (PVAL) (RDLY)
+set res shell &lt;uart/ptp&gt;          <span class="c">; 选择 shell 通道</span>
+set res sdport (PWR)
+-g &lt;port number | name&gt;           <span class="c">; GPIO 读</span>
+-m &lt;port&gt; &lt;mode(0|1)&gt;
+-d &lt;port&gt; &lt;direction(0|1)&gt;
+-s &lt;port&gt; &lt;pol(0|1)&gt;
+-p &lt;port&gt; &lt;none/PD/PU(0|1|2)&gt;     <span class="c">; 上/下拉</span></pre>
+<p><code>set res shell &lt;uart/ptp&gt;</code> 是重点：<strong>PTP 就是相机通过 USB 说话的标准协议</strong>。
+这提示 GR II 存在一条"<strong>经 USB-PTP 驱动固件内 shell</strong>"的通道，
+其形态与 GR IV 仓库利用的工厂入口属于同一类。但<strong>触发条件本轮未定位</strong>，
+且量产机上 shell 是否被编译期关闭无法从静态分析确认。</p>
+
+<h3>8.5 固件升级链路</h3>
+<p>升级流程的字符串（与日志文案混排）可直接拼出完整时序：</p>
+<pre>Install Files
+   -> OK (%d files)          <span class="c">/ -> error!</span>
+Run Update Script.           <span class="c">; E:/update.ttl  A:/update.ttl</span>
+   -> cannot load.
+Run Update Script (optional). <span class="c">; H:/update.ttl</span>
+Format LOG drive
+fsys stop
+fe -e
+fsys start
+up -noreboot
+power-off....
+ %s Version : %02X.%02X.%02X</pre>
+<p>三点结论：</p>
+<ul>
+  <li>升级会<strong>按顺序尝试三个 <code>update.ttl</code></strong>（E: → A: → H:），其中 H: 是可选路径。</li>
+  <li>脚本执行发生在 <code>fsys stop</code> 之前的<strong>可写状态下</strong>，说明 <code>update.ttl</code>
+      具备对内部文件系统动手的能力——这正是 GR IV 工厂脚本的等价物。</li>
+  <li><strong>三个候选盘符都不是 SD 卡</strong>（见 8.6），因此无法直接放一个自制 <code>update.ttl</code> 到卡上触发。</li>
+</ul>
+
+<h3>8.6 盘符与文件系统全貌</h3>
+<table>
+  <thead><tr><th style="width:8%">盘符</th><th style="width:30%">代表路径</th><th>性质推断</th></tr></thead>
+  <tbody>
+    <tr><td class="m">A:</td><td>adj/ fix/ font/ img/ isp/ video/ audio/ cpu1/、<code>command.txt</code>、<code>update.ttl</code></td>
+        <td>机内系统盘（<code>b01firm6.bin</code> 即其镜像，127 条路径）</td></tr>
+    <tr><td class="m">B:</td><td><code>P_BOX00..05.bin</code>、<code>P_MY00..02.bin</code>、<code>P_SNAPSHOT.bin</code>、<code>Invent.bin</code>、<code>FALL.CSV</code>、<code>*.CSV</code></td>
+        <td>用户数据/设置盘（<code>P_</code> 前缀 = 用户自定义模式与快照）</td></tr>
+    <tr><td class="m">C:</td><td><code>C:/adj/*</code>、<code>C:/fix/*</code></td>
+        <td>与 A: 同构的第二套校准/固定值（备份或第二传感器组）</td></tr>
+    <tr><td class="m">E:</td><td><code>E:/update.ttl</code>、<code>E:/attach.txt</code></td>
+        <td>升级临时区</td></tr>
+    <tr><td class="m">H:</td><td><code>H:/RADJ/%s/Adjust.ttl</code>、<code>H:/update.ttl</code>、<code>H:/backup.ttl</code></td>
+        <td>服务/维修区（RADJ = 维修校准）</td></tr>
+  </tbody>
+</table>
+<p class="hint">路径正则统计：<code>b01firm6</code> 127 条、<code>b01firm8</code> 132 条，
+两镜像的路径集合互为补充，可视为 GR II 的完整文件命名空间。</p>
+
+<h3>8.7 CtrlEntity 属性系统</h3>
+<p>固件含一套<strong>点号命名属性注册表</strong>，共 <strong>336</strong> 个键，源文件标识为
+<code>CtrlEntity.c</code>（第 47 行有一个对 ID 范围的断言）：</p>
+<pre>boot.sequenceID              boot.step
+boot.isActivated[SECT_CORE]  [SECT_FRM]  [SECT_LENS]  [SECT_FE]
+boot.isActivated[SECT_BE0]   [SECT_BE]   [SECT_APP]
+boot.isActivated[SECT_OTHERS][SECT_EXT]  [SECT_END]
+system.isModePending   system.pendMode   system.pendModeIntent
+system.isDialPending   system.pendShootingMode   system.isStarting
+shoot.isSelfDisable
+debug.processLoad[FIFO_INPUT] [FIFO_PENDING] [FIFO_PROCESS]
+cref.focusDirec[zp]    cref.wgCtrlMode   cref.wgDispNaviMode
+detectProp.detectMode  controlInfo.wbMode</pre>
+<p>访问器 <code>0xa00e5f20</code>（即第 7 章门控调用的那个）返回一个上下文表，
+另一处按 ID 取值的分发器对参数做 <code>subs r0,#0x2100 / cmp r0,#0x40 / blo</code> 的范围检查，
+即<strong>属性 ID 空间为 <code>0x2100–0x213F</code></strong>（64 槽）。
+该系统的存在说明 GR II 的参数体系与 GR IV 同为"<strong>命名实体 + 数值 ID</strong>"双轨设计。</p>
+
+<h3>8.8 缺口更新</h3>
+<table>
+  <thead><tr><th style="width:30%">问题</th><th style="width:13%">第一轮</th><th style="width:17%">第二轮</th><th>第三轮</th></tr></thead>
+  <tbody>
+    <tr><td>固件可分析性</td><td class="no">未知</td><td class="yes">已解密</td><td class="yes">作业表/属性表全量解出</td></tr>
+    <tr><td>机内资源可枚举</td><td class="no">未知</td><td class="yes">121 个文件</td><td class="yes">5 个盘符命名空间</td></tr>
+    <tr><td>TTL 是否可用</td><td class="part">推断</td><td class="yes">出厂脚本为证</td><td class="yes">升级链路完整还原</td></tr>
+    <tr><td>Startup.ttl 触发条件</td><td class="no">未知</td><td class="part">定位门控字段</td><td class="part">确认为开机阶段推进器的一环</td></tr>
+    <tr><td>是否存在工厂入口</td><td class="no">未知</td><td class="no">未找到</td><td class="yes"><strong>存在</strong>：产线测试控制台 + 调试 shell</td></tr>
+    <tr><td>入口如何被触发</td><td class="no">未知</td><td class="no">未知</td><td class="no"><strong>仍未知</strong>（唯一硬缺口）</td></tr>
+  </tbody>
+</table>
+
+<h3>8.9 本轮结论</h3>
+<ol>
+  <li><strong>GR II 与 GR IV 的差异不在"能力"，而在"入口"。</strong>
+      GR II 有完整的 TTL 脚本引擎、有工厂控制台、有调试 shell、有固件升级链；
+      GR IV 仓库的价值恰恰是找到了<strong>卡内触发文件</strong>这一无需专用工具的通路，
+      而这在 GR II 上<strong>不存在</strong>。</li>
+  <li><strong>仓库代码依旧无法直接用于 GR II</strong>：<code>inspect_firmware.py</code> 的容器解析、
+      <code>gr4_model.py</code> 的机型 ID（<code>0x132E0/0x132E1/0x13330</code>）、
+      <code>create_factory_entry.py</code> 的 <code>DEVELOP.MOD</code> 系列文件名，在 GR II 上均无对应物。
+      结论与第一轮一致，但依据已从"特征缺失"升级为"双向机制对照"。</li>
+  <li><strong>若要在 GR II 上出成果，方向应转向控制台 / shell 通道</strong>：
+      即定位 <code>set res shell &lt;uart/ptp&gt;</code> 的进入条件
+      （按键组合、UART 引脚电平、或 PTP 私有命令）。这需要<strong>实机</strong>配合，
+      纯静态分析已接近极限。</li>
+  <li><strong>风险提示</strong>：产线控制台的 <code>9 inn drive format test</code>、
+      <code>2 flash erase test</code>、<code>-1 power off</code> 均为不可逆或破坏性操作。
+      在没有实机与恢复手段前，不建议继续深入触发实验。</li>
+</ol>
+
+<footer>
+  分析对象 <code>radium-wang/ricoh-gr4-firmware-analysis-and-feature-expansion</code> ·
+  解码器 <code>jokob/ricohdec</code> · 样本 <code>rg2_v003</code><br>
+  全部操作离线只读；未连接相机、未写入介质。分析产物保存于 <code>gr2-analysis/</code>。
+</footer>
+
+</div>
+</body>
+</html>
