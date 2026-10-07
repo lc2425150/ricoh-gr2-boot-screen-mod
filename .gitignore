@@ -2,9 +2,9 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# 固件提取的原始画面资源（理光版权/商标内容，不随仓库分发）
-assets/*.brp
-assets/*.png
+# Web 工具：固件提取的原始画面资源（理光版权/商标内容，不随仓库分发）
+web-tool/assets/*.brp
+web-tool/assets/*.png
 
 # 固件解密产物（理光固件镜像，不随仓库分发）
 tools/ricohdec/
