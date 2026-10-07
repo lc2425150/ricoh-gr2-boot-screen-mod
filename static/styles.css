@@ -1,0 +1,141 @@
+:root {
+  --bg: #f5f4f1;
+  --panel: #ffffff;
+  --border: #e2e0da;
+  --text: #1a1a18;
+  --muted: #6b6a66;
+  --accent: #c0392b;
+  --accent-dark: #922b20;
+  --ok: #1d7a4f;
+  --warn: #b7791f;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.topbar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 22px;
+  display: flex;
+  align-items: center;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); flex: none;
+}
+.topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
+.topbar .sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+
+.layout { display: flex; min-height: calc(100vh - 120px); }
+
+.sidebar {
+  width: 220px; flex: none;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 16px 10px;
+}
+.sidebar h3 {
+  font-size: 12px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .05em;
+  margin: 0 8px 10px; font-weight: 600;
+}
+.side-item {
+  display: block; width: 100%; text-align: left;
+  padding: 10px 12px; margin-bottom: 4px;
+  border: 1px solid transparent; border-radius: 8px;
+  background: none; cursor: pointer;
+  font-size: 13px; color: var(--text);
+}
+.side-item:hover { background: #f0efeb; }
+.side-item.active { background: #f7e9e6; border-color: #efcfc9; }
+.side-item .tag {
+  float: right; font-size: 11px; color: var(--muted);
+}
+.side-item.locked { opacity: .55; cursor: not-allowed; }
+.side-item.locked .tag { color: var(--warn); }
+
+.main { flex: 1; padding: 22px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 18px;
+}
+.panel h2 { font-size: 15px; margin: 0 0 10px; font-weight: 600; }
+.panel p { margin: 0 0 8px; color: var(--muted); }
+.intro p strong { color: var(--text); }
+
+.ed-head { display: flex; align-items: baseline; justify-content: space-between; }
+.ed-head h2 { margin-bottom: 4px; }
+.ed-head .note { font-size: 12px; color: var(--muted); }
+
+.compare { display: flex; gap: 18px; margin-top: 14px; flex-wrap: wrap; }
+.col { flex: 1; min-width: 280px; }
+.col h4 {
+  font-size: 13px; font-weight: 600; margin: 0 0 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.badge {
+  font-size: 11px; padding: 1px 8px; border-radius: 20px;
+  background: #eeece7; color: var(--muted);
+}
+.badge.new { background: #e8f4ec; color: var(--ok); }
+
+.canvas-wrap {
+  border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; background: #1a1a18;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 240px;
+}
+.canvas-wrap img, .canvas-wrap canvas {
+  display: block; max-width: 100%; height: auto;
+}
+.placeholder {
+  color: #7a7a76; font-size: 13px; padding: 40px 20px; text-align: center;
+}
+
+.dropzone {
+  margin-top: 12px;
+  border: 2px dashed var(--border); border-radius: 10px;
+  padding: 22px; text-align: center; cursor: pointer;
+  color: var(--muted); transition: .15s;
+}
+.dropzone:hover, .dropzone.drag { border-color: var(--accent); background: #faf6f4; }
+.dropzone strong { color: var(--text); }
+
+.actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.btn {
+  border: 1px solid var(--border); background: #fff;
+  color: var(--text); padding: 8px 16px; border-radius: 8px;
+  cursor: pointer; font-size: 13px;
+}
+.btn:hover { background: #f0efeb; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-dark); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.info { font-size: 12px; color: var(--muted); margin-top: 10px; }
+.info b { color: var(--text); }
+
+.hint-box {
+  margin-top: 14px; background: #fbf7e8; border: 1px solid #eee1b8;
+  border-radius: 8px; padding: 12px 14px; font-size: 12px; color: #6b5a1f;
+}
+.hint-box b { color: #5a4a12; }
+
+.foot {
+  padding: 14px 22px; font-size: 12px; color: var(--muted);
+  border-top: 1px solid var(--border); background: var(--panel);
+}

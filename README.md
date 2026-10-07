@@ -53,9 +53,27 @@
 - 工具 `tools/gr2boot.py frm` 默认「演练模式」，无 `--force` 不产出可刷文件
 - **在完成以下三项前不要刷**：① 单字节探针法定位 `nUpdateCsum` 偏移与算法；② 重算回填；③ 先用未修改的原版固件验证一次刷写与回滚流程
 
-## 四、目录结构
+## 四、Web 图形化工具（新增）
+
+除命令行工具 `tools/gr2boot.py` 外，本仓库提供**浏览器图形界面**，免命令行操作：
+
+```bash
+# 依赖：Python 3 + Pillow
+pip install Pillow
+sh start.sh          # 或 python3 app.py
+# 浏览器打开 http://127.0.0.1:8787
+```
+
+功能：拖拽导入图片 → 后端精确转 RGB565 → 实时预览 → 下载 `.brp` 与 `Startup.ttl`。只覆盖 `dvf_TDSt.brp`（开机画面）与 `dvf_key.brp`（机身线稿图），`dvf_mark.brp`（认证标签）已锁定不可编辑。原始画面预览需先自提资源（见 `assets/README.md`），不提取也不影响导入自定义图片。
+
+## 五、目录结构
 
 ```
+├── app.py                             # Web 工具后端（标准库 http.server + Pillow）
+├── start.sh                           # Web 工具启动脚本
+├── static/                            # Web 工具前端（index.html / app.js / styles.css）
+├── assets/                            # 原始画面自提目录（.brp 不随仓库分发）
+├── LICENSE                            # MIT
 ├── README.md
 ├── docs/
 │   ├── GR2-固件可行性分析报告.html     # 十章完整逆向报告（离线版；最新版在资料库云端页）
@@ -70,7 +88,7 @@
     └── 我的开机画面.png                # 640×480 示例图（深蓝底金字 MY GR II）
 ```
 
-## 五、重要声明
+## 六、重要声明
 
 - 本项目所有结论来自**离线静态分析**；真机验证项见上文，请按「验证优先」流程操作
 - 固件版权归理光（Ricoh）所有；本仓库**不含**任何固件二进制与提取出的原厂资源，原厂 `dvf_TDSt.brp` 备份仅保留在本地

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GR II 画面定制工具</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <div>
+      <h1>GR II 画面定制工具</h1>
+      <p class="sub">理光 GR II（rg2_v003）开机画面 · 机身线稿图替换 · 无变砖风险</p>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main" id="main">
+    <section class="panel intro">
+      <h2>工作原理</h2>
+      <p>GR II 的画面是<strong>未压缩 RGB565 帧缓冲</strong>（640×480×2 字节），等长替换即可。工具生成两个文件放到 SD 卡根目录，相机开机时自动执行脚本覆盖机内画面——<strong>不碰固件、零变砖风险</strong>，拔卡即恢复。</p>
+    </section>
+    <section class="panel" id="editor" style="display:none"></section>
+  </main>
+</div>
+
+<footer class="foot">
+  <span>基于固件静态分析（rg2_v003），相机侧尚未实机验证。只覆盖开机画面 / 线稿图，勿动背面铭牌（合规）。</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
