@@ -72,7 +72,7 @@
   // ---- 选择资源 ----
   function select(r) {
     current = r.key;
-    newBrB64 = null;
+    newBrpB64 = null;
     newPng = null;
     pendingFile = null;
     document.querySelectorAll(".side-item").forEach((b) =>
